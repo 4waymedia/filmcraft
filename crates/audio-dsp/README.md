@@ -170,6 +170,23 @@ window, which matters for dialogue and music cut at speed; WSOLA copies the inpu
 so a transient that is heard keeps its shape (see Known limits for which ones are not heard, or are
 heard twice).
 
+## Music cues (`cues`)
+
+Cutting picture to music (beyond Premiere). `cues::analyze(channels, rate)` (or `from_analysis`
+with a cached `remix::Analysis`) returns `Cues`: beat attacks, tempo, meter (3 or 4) and downbeats,
+phrases (every 4 bars from each section start), sections (structure features: how each bar
+repeats the bars before it, plus energy changes), per-beat energy / level / onset strength, hits
+and drops, and quiet runs. `cues::cut_points(&cues, CutParams { pacing, density, sections, hits })`
+picks shot boundaries by dynamic programming (cue scores minus a shot-length penalty) within the
+pacing profile's range: Calm 2–8 bars, Cinematic 1–4, Energetic ½–2, Trailer ½–4 (shortening as
+the cut goes on). Profiles and weights match AssetCraft's storyboard generator.
+
+- Tested on generated music: downbeats within 30 ms of bar lines at 100/120/128 BPM, 3/4 found,
+  section boundaries where the chord form changes (and not where a section repeats), a drop after
+  a two-bar break, quiet runs, shot lengths inside each profile's range, hostile input (NaN, ∞,
+  truncated audio, inconsistent analyses) under `catch_unwind`.
+- Try it on a WAV: `cargo run -p filmcraft-audio-dsp --release --example cues -- song.wav trailer 50`.
+
 ## Known limits
 
 - Effects assume ≤ the channel count they were built with; extra channels pass through
