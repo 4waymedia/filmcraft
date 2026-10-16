@@ -6,6 +6,8 @@
 //!   registry ([`effects()`]) describing every effect's parameters (range, unit, default) so the
 //!   engine and UI can build controls generically.
 //! * [`biquad`] — RBJ-cookbook biquads (TDF-II) with analytic magnitude response.
+//! * [`cues`] — music cues for cutting to music: meter, downbeats, phrases, sections, energy,
+//!   hits and drops, quiet passages, and scored cut points per pacing profile.
 //! * [`sync`] — offset between two recordings of one event (GCC-PHAT, sample-accurate).
 //! * [`resample`] — streaming, block-invariant rate conversion for playback on a device at another rate.
 //! * [`channels`] — channel layouts, ITU-R BS.775 up/downmix, 5.1 mixdown types, the 5.1 panner.
@@ -21,6 +23,7 @@
 
 pub mod biquad;
 pub mod channels;
+pub mod cues;
 pub mod design;
 pub mod ducking;
 pub mod effects;
