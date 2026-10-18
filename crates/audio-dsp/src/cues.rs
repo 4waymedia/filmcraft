@@ -7,10 +7,12 @@
 //! per beat       ─► RMS (dB), low band < 150 Hz RMS (dB), onset strength (spectral flux at the attack)
 //! meter, phase   ─► harmonic change 1 − S(i−1, i) (+ ¼ onset accent) averaged per bar phase,
 //!                   for 4 and 3 beats per bar; the phase that stands out most marks the downbeats
+//!                   (3/4 only when it stands out twice as clearly as 4/4)
 //! sections       ─► structure features (Serrà et al. 2012, simplified): how much each bar repeats
 //!                   the bar k bars earlier (one bar of S along the diagonal), for k = 1 … 32; a
 //!                   downbeat where that repeat pattern (plus ½ × the energy) differs between the
-//!                   2 bars before and after is a boundary; peaks ≥ 30 % of the largest, ≥ 4 bars apart
+//!                   2 bars before and after is a boundary; peaks ≥ 40 % of the largest and ≥ median + MAD,
+//!                   ≥ 4 bars and ~7.5 s apart
 //! phrases        ─► every 4 bars from each section start
 //! hits           ─► an attack (onset ≥ ¾ × the median) ≥ 6 dB louder, full band or < 150 Hz, than
 //!                   the loudest of the 4 beats before;
@@ -277,7 +279,7 @@ pub fn from_analysis(a: &Analysis, channels: &[&[f32]]) -> Result<Cues, CueError
     };
     let (c4, p4) = contrast(&phase_scores(4));
     let (c3, p3) = contrast(&phase_scores(3));
-    let (meter, phase) = if m >= 6 && c3 > 1.25 * c4.max(0.0) && c3 > 0.0 { (3, p3) } else { (4, p4) };
+    let (meter, phase) = if m >= 6 && c3 > 2.0 * c4.max(0.0) && c3 > 0.0 { (3, p3) } else { (4, p4) };
     let meter = if m < 2 * meter { 4 } else { meter };
     let downbeats: Vec<usize> = (0..m).filter(|i| i % meter == phase % meter).collect();
 
@@ -309,15 +311,21 @@ pub fn from_analysis(a: &Analysis, channels: &[&[f32]]) -> Result<Cues, CueError
         structure + 0.5 * (e_after - e_before).abs()
     };
     let edge = 2 * meter;
-    let gap = 4 * meter;
+    // at least 4 bars and ~7.5 s between boundaries
+    let gap = (4 * meter).max((7.5 * a.bpm / 60.0).round() as usize);
     let cands: Vec<(usize, f32)> = downbeats.iter().filter(|&&i| i >= edge && i + edge <= m).map(|&i| (i, novelty(i))).collect();
     let nmax = cands.iter().map(|c| c.1).fold(0.0, f32::max);
     let mut order = cands.clone();
     order.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
     let mut bounds: Vec<(usize, f32)> = Vec::new();
+    // a boundary stands out from the typical novelty: ≥ 45 % of the largest and ≥ median + 2 MAD
+    let vals: Vec<f32> = cands.iter().map(|c| c.1).collect();
+    let med = median(&vals);
+    let mad = median(&vals.iter().map(|v| (v - med).abs()).collect::<Vec<_>>());
+    let floor = (0.4 * nmax).max(med + 1.0 * mad);
     if nmax > 0.02 {
         for (i, v) in order {
-            if v < 0.3 * nmax {
+            if v < floor {
                 break;
             }
             if bounds.iter().all(|(b, _)| b.abs_diff(i) >= gap) {
