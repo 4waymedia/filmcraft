@@ -4224,6 +4224,7 @@ fn build() -> Vec<CommandSpec> {
     v.extend(crate::panels::commands());
     v.extend(crate::scopes::commands());
     v.extend(crate::remix::commands());
+    v.extend(crate::music_cuts::commands());
     v.extend(crate::voiceover::commands());
     v.extend(crate::narration::commands());
     v.extend(crate::keyboard::commands());
