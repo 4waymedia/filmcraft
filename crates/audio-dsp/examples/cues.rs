@@ -59,18 +59,37 @@ fn clock(samples: i64, sr: u32) -> String {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<String> = std::env::args().collect();
+    let json = args.iter().any(|a| a == "--json");
+    args.retain(|a| a != "--json");
     let Some(path) = args.get(1) else {
-        eprintln!("usage: cues <song.wav> [calm|cinematic|energetic|trailer] [density 0..100]");
+        eprintln!("usage: cues <song.wav> [calm|cinematic|energetic|trailer] [density 0..100] [--json]");
         std::process::exit(2);
     };
     let pacing = args.get(2).map(|p| Pacing::from_id(p).ok_or(format!("unknown pacing {p}"))).transpose()?.unwrap_or_default();
     let density = args.get(3).map(|d| d.parse::<f64>()).transpose()?.unwrap_or(50.0);
-    let (audio, sr) = read_wav(&std::fs::read(path)?)?;
+    let bytes = std::fs::read(path).map_err(|e| format!("cannot read '{path}': {e} (the example reads WAV files; convert MP3 with ffmpeg first)"))?;
+    let (audio, sr) = read_wav(&bytes).map_err(|e| format!("'{path}': {e}"))?;
     let refs: Vec<&[f32]> = audio.iter().map(Vec::as_slice).collect();
     let t0 = std::time::Instant::now();
     let c = cues::analyze(&refs, sr)?;
     let took = t0.elapsed();
+    if json {
+        let secs = |b: usize| c.beats.get(b).map(|&s| s as f64 / sr as f64).unwrap_or(c.len as f64 / sr as f64);
+        let list = |v: Vec<String>| format!("[{}]", v.join(","));
+        let pts = cues::cut_points(&c, CutParams { pacing, density, ..CutParams::default() });
+        println!(
+            "{{\"bpm\":{:.3},\"meter\":{},\"beats\":{},\"downbeats\":{},\"sections\":{},\"hits\":{},\"cuts\":{}}}",
+            c.bpm,
+            c.meter,
+            list((0..c.beats.len()).map(|b| format!("{:.4}", secs(b))).collect()),
+            list(c.downbeats.iter().map(|&b| format!("{:.4}", secs(b))).collect()),
+            list(c.sections.iter().map(|s| format!("{:.4}", secs(s.start))).collect()),
+            list(c.hits.iter().map(|h| format!("[{:.4},{}]", secs(h.beat), h.drop)).collect()),
+            list(pts.iter().map(|p| format!("{:.4}", p.sample as f64 / sr as f64)).collect()),
+        );
+        return Ok(());
+    }
     println!("{path}: {:.1} BPM, {}/4, {} beats, {} bars ({} ms)", c.bpm, c.meter, c.beats.len(), c.downbeats.len(), took.as_millis());
     println!("\nSections");
     for (k, s) in c.sections.iter().enumerate() {
