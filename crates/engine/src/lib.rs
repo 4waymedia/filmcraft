@@ -35,6 +35,7 @@ mod media_queue;
 pub mod media_watch;
 pub mod mixer;
 pub mod multicam;
+pub mod music_cuts;
 pub mod narration;
 mod palette;
 pub mod panels;
@@ -1394,6 +1395,8 @@ mod media_watch_tests;
 mod mixer_tests;
 #[cfg(test)]
 mod multicam_tests;
+#[cfg(test)]
+mod music_cuts_tests;
 #[cfg(test)]
 mod narration_tests;
 #[cfg(test)]
