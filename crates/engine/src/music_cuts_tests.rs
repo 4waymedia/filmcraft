@@ -169,3 +169,38 @@ fn silence_has_no_beat() {
     let e = s.execute("audio.suggestCuts", json!({"clip": c})).unwrap_err().to_string();
     assert!(e.contains("no beat") || e.contains("cannot suggest"), "{e}");
 }
+
+#[test]
+fn markers_menu_items_use_the_selected_clip_and_their_pacing() {
+    let (mut s, c) = session(0.0);
+    let ids = ["audio.suggestCuts.calm", "audio.suggestCuts.cinematic", "audio.suggestCuts.energetic", "audio.suggestCuts.trailer"];
+    for id in ids {
+        let spec = crate::commands::find(id).unwrap();
+        assert_eq!(spec.menu, &["Markers", "Suggest Cuts from Music"]);
+        assert!((spec.enabled)(&s).is_ok(), "{id} enabled with a music clip selected");
+    }
+    let r = s.execute("audio.suggestCuts.energetic", json!({})).unwrap();
+    assert_eq!((r["clip"].as_u64(), r["pacing"].as_str()), (Some(c.0), Some("energetic")));
+    assert!(!ours(&s).is_empty());
+    // the pacing can't be overridden through the menu item
+    let r = s.execute("audio.suggestCuts.calm", json!({"pacing": "trailer"})).unwrap();
+    assert_eq!(r["pacing"], "calm");
+    // nothing selected: disabled with a reason
+    s.execute("edit.deselectAll", json!({})).unwrap();
+    let why = (crate::commands::find("audio.suggestCuts.trailer").unwrap().enabled)(&s).unwrap_err();
+    assert!(why.contains("music clip"), "{why}");
+}
+
+#[test]
+fn long_clips_are_refused_before_decoding() {
+    // eleven minutes of silence: refused by length before any audio is read
+    let mut s = Session::default();
+    s.execute("file.newSequence", json!({"name": "long", "audio": 1, "video": 1})).unwrap();
+    let z = vec![0f32; 8_000 * 2 * 660];
+    let bytes: Arc<[u8]> = crate::previews::write_wav_f32(&z, 8_000).into();
+    let item = crate::commands::import_bytes(&mut s, "/long.wav", bytes, None).unwrap();
+    let r = s.execute("timeline.place", json!({"item": item.0, "audioTrack": "A1", "seconds": 0.0})).unwrap();
+    let c = r["clips"][0].as_u64().unwrap();
+    let e = s.execute("audio.suggestCuts", json!({"clip": c})).unwrap_err().to_string();
+    assert!(e.contains("10 minutes"), "{e}");
+}

@@ -4,6 +4,7 @@
 //! | command | what it does |
 //! |---|---|
 //! | `audio.suggestCuts {clip?, pacing="cinematic", density=0..100=50, sections=true, hits=true, apply="markers", replace=true}` | analyses the music clip (default: the selected audio clip) and, with `apply: "markers"`, adds sequence markers in one undo step ("Suggest Cuts"); `apply: "none"` only reports |
+//! | `audio.suggestCuts.calm` / `.cinematic` / `.energetic` / `.trailer` | Markers ▸ Suggest Cuts from Music ▸ Calm / Cinematic / Energetic / Trailer: the same on the selected audio clip with that pacing |
 //!
 //! `pacing` is `calm`, `cinematic`, `energetic` or `trailer` (shot ranges in
 //! [`filmcraft_audio_dsp::cues::Pacing`]). `density` moves the preferred shot length from the
@@ -39,6 +40,9 @@ pub const TAG: &str = "[music] ";
 
 const CMD: &str = "audio.suggestCuts";
 
+/// Longest stretch of music analysed (the decoded audio is held in memory).
+pub const MAX_SECONDS: i64 = 600;
+
 fn check_clip(s: &Session, c: ClipId) -> std::result::Result<(), String> {
     let seq = s.active_sequence().ok_or("no sequence is open")?;
     let (t, it) = seq.find_item(c).ok_or("no such clip")?;
@@ -57,6 +61,9 @@ fn check_clip(s: &Session, c: ClipId) -> std::result::Result<(), String> {
     }
     if it.duration <= Tick::ZERO {
         return Err("the clip is empty".into());
+    }
+    if it.duration > Tick::from_seconds_f64(MAX_SECONDS as f64) {
+        return Err(format!("Suggest Cuts analyses at most {} minutes of music; trim or split the clip", MAX_SECONDS / 60));
     }
     Ok(())
 }
@@ -207,15 +214,72 @@ fn can_suggest(s: &Session) -> std::result::Result<(), String> {
     has_seq(s)
 }
 
+/// The menu items: Markers ▸ Suggest Cuts from Music ▸ <pacing> on the selected audio clip.
+fn can_suggest_selected(s: &Session) -> std::result::Result<(), String> {
+    has_seq(s)?;
+    let c = crate::remix::selected_audio(s).ok_or("select a music clip on an audio track")?;
+    check_clip(s, c)
+}
+
+fn suggest_with(s: &mut Session, p: &Value, pacing: Pacing) -> Result<Value> {
+    let mut q = if p.is_object() { p.clone() } else { json!({}) };
+    q["pacing"] = json!(pacing.id());
+    suggest(s, &q)
+}
+
 pub fn commands() -> Vec<CommandSpec> {
-    vec![CommandSpec {
-        id: CMD,
-        label: "Suggest Cuts from Music",
-        menu: &[],
-        shortcut: None,
-        params: r#"{"clip":id?,"pacing":"calm"|"cinematic"|"energetic"|"trailer"="cinematic","density":0..100=50,"sections":bool=true,"hits":bool=true,"apply":"markers"|"none"="markers","replace":bool=true}"#,
-        enabled: can_suggest,
-        run: suggest,
-        journal: true,
-    }]
+    const MENU: &[&str] = &["Markers", "Suggest Cuts from Music"];
+    const PARAMS: &str = r#"{"clip":id?,"density":0..100=50,"sections":bool=true,"hits":bool=true,"apply":"markers"|"none"="markers","replace":bool=true}"#;
+    vec![
+        CommandSpec {
+            id: CMD,
+            label: "Suggest Cuts from Music",
+            menu: &[],
+            shortcut: None,
+            params: r#"{"clip":id?,"pacing":"calm"|"cinematic"|"energetic"|"trailer"="cinematic","density":0..100=50,"sections":bool=true,"hits":bool=true,"apply":"markers"|"none"="markers","replace":bool=true}"#,
+            enabled: can_suggest,
+            run: suggest,
+            journal: true,
+        },
+        CommandSpec {
+            id: "audio.suggestCuts.calm",
+            label: "Calm",
+            menu: MENU,
+            shortcut: None,
+            params: PARAMS,
+            enabled: can_suggest_selected,
+            run: |s, p| suggest_with(s, p, Pacing::Calm),
+            journal: true,
+        },
+        CommandSpec {
+            id: "audio.suggestCuts.cinematic",
+            label: "Cinematic",
+            menu: MENU,
+            shortcut: None,
+            params: PARAMS,
+            enabled: can_suggest_selected,
+            run: |s, p| suggest_with(s, p, Pacing::Cinematic),
+            journal: true,
+        },
+        CommandSpec {
+            id: "audio.suggestCuts.energetic",
+            label: "Energetic",
+            menu: MENU,
+            shortcut: None,
+            params: PARAMS,
+            enabled: can_suggest_selected,
+            run: |s, p| suggest_with(s, p, Pacing::Energetic),
+            journal: true,
+        },
+        CommandSpec {
+            id: "audio.suggestCuts.trailer",
+            label: "Trailer",
+            menu: MENU,
+            shortcut: None,
+            params: PARAMS,
+            enabled: can_suggest_selected,
+            run: |s, p| suggest_with(s, p, Pacing::Trailer),
+            journal: true,
+        },
+    ]
 }
