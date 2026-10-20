@@ -104,7 +104,12 @@ pub(crate) fn analysis_rate(s: &Session) -> u32 {
 
 /// Planar audio of `[source_in, source_in + dur)` of the item's media at [`analysis_rate`].
 pub(crate) fn read_audio(s: &Session, item: ItemId, source_in: Tick, dur: Tick) -> Result<Vec<Vec<f32>>> {
-    let sr = analysis_rate(s);
+    read_audio_at(s, item, source_in, dur, analysis_rate(s))
+}
+
+/// Planar audio of `[source_in, source_in + dur)` of the item's media at `sr`.
+pub(crate) fn read_audio_at(s: &Session, item: ItemId, source_in: Tick, dur: Tick, sr: u32) -> Result<Vec<Vec<f32>>> {
+    let sr = sr.max(1);
     let m0 = source_in.to_units_floor(sr as i64);
     let len = (source_in + dur).to_units_floor(sr as i64) - m0;
     let provider = s.media.provider(s.project.clone(), s.services.clone());
