@@ -54,6 +54,7 @@ pub mod shortcut_presets;
 pub mod shortcuts;
 pub mod source_monitor;
 pub mod sync;
+pub mod trailer;
 pub mod transcript;
 pub mod trim;
 pub mod voiceover;
@@ -1319,6 +1320,8 @@ mod tests;
 mod timeline_move_tests;
 #[cfg(test)]
 mod track_params_tests;
+#[cfg(test)]
+mod trailer_tests;
 #[cfg(test)]
 mod transcript_tests;
 #[cfg(test)]
